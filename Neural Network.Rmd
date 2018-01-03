@@ -1,0 +1,97 @@
+---
+title: "R Neural Network"
+output: html_notebook
+---
+
+```{r}
+if (!"install.load" %in% rownames(installed.packages()))
+  install.packages("install.load")
+library(install.load)
+#install the required packages
+pkgs_to_install_load <- c("readr","dplyr","tidyr","lubridate","ggplot2","car","h2o",
+                          "caTools","MASS", "gridExtra", "e1071", "klaR", "arules", "class", "scales", 
+                          "purrr","kernlab","doParallel","png","caret","h2o")
+sapply(pkgs_to_install_load,install_load)
+install.packages("neuralnet ")
+library(neuralnet)
+
+```
+
+## Read file
+```{r}
+churn <- read_csv("C:/Users/sandeep/Downloads/Predictive - Shung/Predicitive Dataset/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+attach(churn)
+```
+## Add a new data column if output is categorical into numerical
+```{r}
+
+churn$churn_number <- 0
+churn$churn_number[churn$Churn == 'Yes'] <- 1
+#str(churn)
+```
+
+## Data sampling
+```{r}
+sample = sample.split(churn$churn_number, SplitRatio = .75)
+train = subset(churn, sample == TRUE)
+test  = subset(churn, sample == FALSE)
+
+```
+
+
+## Model
+```{r}
+f <- as.formula(paste("train$churn_number ~", paste(n[!n %in% "medv"], collapse = " + ")))
+nn <- neuralnet(f,data=train_,hidden=c(5,3),linear.output=T)
+
+
+NN = neuralnet(train$churn_number ~ tenure * Contract_MM +
+                Internet_FiberOptic+PaperlessBilling_Yes+Electronic_check_PM, train, hidden = 3 , linear.output = T )
+
+summary(fit)
+```
+
+
+```{r}
+# Initialize the h2o environment
+library(h2o)
+#use all cores and 3GB ram
+h2o.init(nthreads = -1,min_mem_size = "3g") 
+#check the connection
+h2o.getConnection()
+
+#Import the train and test datasets as H2o objects
+churnTrain <- h2o.importFile("C:/Users/sandeep/Downloads/Predictive - Shung/Project/train.csv")
+churnTest <-h2o.importFile("C:/Users/sandeep/Downloads/Predictive - Shung/Project/test.csv")
+
+class(churnTrain)
+#Assign the predictor and response variables
+y <- "Churn" 
+x <- setdiff(names(churnTrain), y) 
+```
+
+
+```{r}
+model_1 <- h2o.deeplearning(x=x,
+                            y=y,
+                            training_frame = churnTrain,
+                            seed=123,
+                            variable_importances = TRUE,
+                            activation="MaxoutWithDropout",
+                            hidden = c(90),
+                            hidden_dropout_ratio = c(0.1),
+                            l1 = 1e-5,
+                            nfolds=5,
+                            initial_weight_distribution = "Normal",
+                            balance_classes = TRUE,
+                            sparse=TRUE,
+                            reproducible = TRUE,
+                            epochs = 1,
+                            keep_cross_validation_predictions = TRUE)
+model_1_predict <- h2o.predict(model_1,newdata = churnTest)
+model_1_predict <- as.data.frame(model_1_predict)
+head(model_1_predict)
+confusionMatrix(model_1_predict$predict,test$Churn,positive='Yes')
+perf_1<- h2o.performance(model_1,churnTest)
+h2o.auc(perf_1)
+```

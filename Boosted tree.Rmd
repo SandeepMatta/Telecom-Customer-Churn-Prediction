@@ -1,0 +1,75 @@
+---
+title: "R Notebook Boosted Tree"
+---
+
+```{r}
+churn <- read_csv("C:/Users/sandeep/Downloads/Predictive - Shung/Predicitive Dataset/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+attach(churn)
+```
+## Add a new data column if output is categorical into numerical
+```{r}
+churn$churn_number <- 0
+churn$churn_number[churn$Churn == 'Yes'] <- 1
+#str(churn)
+```
+
+## Convert all characters into factors
+```{r}
+churn=churn %>% mutate_if(is.character, as.factor)
+churn <- churn[,-1]
+churn <- churn[,-20]
+```
+## Data sampling ( partition into test and training dataset)
+```{r}
+sample = sample.split(churn$churn_number, SplitRatio = .75)
+train = subset(churn, sample == TRUE)
+test  = subset(churn, sample == FALSE)
+str(train)
+colnames(train)
+nrow(test)
+
+```
+
+
+```{r}
+
+fitControl <- trainControl(method = "repeatedcv", number = 4, repeats = 4)
+set.seed(123)
+gbmFit1 <- train(as.factor(churn_number)  ~ ., 
+                 data = train, method = "gbm", trControl = fitControl,verbose = FALSE)
+
+gbmFit1
+
+train_prob_gbm<-predict(gbmFit1, train,type= "prob")[,2]
+
+test_prob_gbm<-predict(gbmFit1, test,type= "prob")[,2]
+
+auc(train$churn_number,train_prob_gbm)
+auc(test$churn_number,test_prob_gbm)
+
+Boost_gbmFit1<-gbm(as.character(churn_number)~.,data=train,distribution="bernoulli",n.trees=1000,
+                  interaction.depth=4,n.minobsinnode = 100,shrinkage = 0.01)
+Boost_gbmFit1
+pred.boost<-predict(Boost_gbmFit1,newdata=train,n.trees=1000,type="response")
+auc(train$churn_number,pred.boost)
+pred.boost<-predict(Boost_gbmFit1,newdata=test,n.trees=1000,type="response")
+auc(test$churn_number,pred.boost)
+
+fit.results.churn_rf <- ifelse(pred.boost > 0.5,1,0)
+misClasificError <- mean(fit.results.churn_rf != test$churn_number)
+print(paste('Accuracy',1-misClasificError))
+
+fit.results.churn_rf <- ifelse(pred.boost > 0.5,1,0)
+misClasificError <- mean(fit.results.churn_rf != train$churn_number)
+print(paste('Accuracy',1-misClasificError))
+
+```
+
+
+
+
+
+
+
+
+

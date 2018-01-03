@@ -1,0 +1,224 @@
+---
+title: "Telcom Churn Random Forest"
+---
+```{r}
+library(readr)
+library(woe)
+library(car)
+require("randomForest")
+require("ROCR")
+#install.packages("neuralnet")
+require(neuralnet)
+#install.packages("nnet")
+require(nnet)
+require(ggplot2)
+#install.packages("caret")
+library(caret)
+#install.packages("Metrics")
+library(Metrics)
+#install.packages("gbm")
+library(gbm)
+library(caTools)
+#install.packages("e1071")
+library(ROCR)
+library(e1071)
+library(caret)
+library(dplyr)
+#library(devtools)
+
+#install.packages("woe")
+library(woe)
+#install.packages("devtools")
+library(devtools)
+#install.packages("riv")
+library(riv) 
+
+```
+
+
+```{r}
+churn <- read_csv("C:/Users/sandeep/Downloads/Predictive - Shung/Predicitive Dataset/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+attach(churn)
+#str(churn)
+```
+
+## Add a new data column if output is categorical into numerical
+```{r}
+churn$churn_number <- 0
+churn$churn_number[churn$Churn == 'Yes'] <- 1
+#str(churn)
+```
+
+## Creating different bins for important variables and renaming them
+##
+```{r}
+churn<-cbind(churn,class.ind(churn$InternetService))
+names(churn)[names(churn)=="No"] <- "NoFibreOptic"
+names(churn)[names(churn)=="DSL"] <- "Internet_DSL"
+names(churn)[names(churn)=="Fiber optic"] <- "Internet_FiberOptic"
+str(churn)
+```
+
+##
+```{r}
+churn<-cbind(churn,class.ind(churn$OnlineSecurity))
+names(churn)[names(churn)=="No"] <- "OnlineSecurity_No"
+names(churn)[names(churn)=="Yes"] <- "OnlineSecurity_Yes"
+str(churn)
+```
+
+##
+```{r}
+churn<-cbind(churn,class.ind(churn$PhoneService))
+names(churn)[names(churn)=="No"] <- "PhoneService_No"
+names(churn)[names(churn)=="Yes"] <- "PhoneService_Yes"
+str(churn)
+```
+
+##
+```{r}
+churn<-cbind(churn,class.ind(churn$TechSupport))
+names(churn)[names(churn)=="No"] <- "TechSupport_No"
+names(churn)[names(churn)=="Yes"] <- "TechSupport_Yes"
+names(churn)[names(churn)=="No internet service"] <- "TechSupport_No_Int"
+str(churn)
+```
+
+##
+```{r}
+churn<-cbind(churn,class.ind(churn$Contract))
+names(churn)[names(churn)=="Month-to-month"] <- "Contract_MM"
+names(churn)[names(churn)=="One year"] <- "Contract_OneYear"
+names(churn)[names(churn)=="Two year"] <- "Contract_TwoYear"
+str(churn)
+```
+
+##
+```{r}
+churn<-cbind(churn,class.ind(churn$PaperlessBilling))
+names(churn)[names(churn)=="No"] <- "PaperlessBilling_No"
+names(churn)[names(churn)=="Yes"] <- "PaperlessBilling_Yes"
+str(churn)
+```
+
+##
+```{r}
+churn<-cbind(churn,class.ind(churn$Partner))
+names(churn)[names(churn)=="No"] <- "Partner_No"
+names(churn)[names(churn)=="Yes"] <- "Partner_Yes"
+str(churn)
+```
+
+##
+```{r}
+churn<-cbind(churn,class.ind(churn$PaymentMethod))
+names(churn)[names(churn)=="Electronic check"] <- "Electronic_check_PM"
+names(churn)[names(churn)=="Bank_transfer_(automatic)"] <- "Bank_transfer"
+names(churn)[names(churn)=="Credit_card_(automatic)"] <- "Credit_card"
+names(churn)[names(churn)=="Mailed check"] <- "Mailed_check"
+str(churn)
+```
+## Convert all characters into factors
+```{r}
+churn=churn %>% mutate_if(is.character, as.factor)
+churn <- churn[,-1]
+```
+
+## Samlping
+```{r}
+
+sample = sample.split(churn$churn_number, SplitRatio = .75)
+train_data = subset(churn, sample == TRUE)
+test_data  = subset(churn, sample == FALSE)
+nrow(train_data)
+nrow(test_data)
+str(train_data)
+#train_data<- train_data[,-1]
+
+```
+
+
+## removed custimer_id (factor level was more than 7000) and Tech_Suport_NO_INT (was repeated twice)
+```{r}
+#taking ll predictor
+str(train_data)
+attach(train_data)
+Churn.rf=randomForest(churn_number ~ gender + SeniorCitizen + Partner+Dependents+tenure+ PhoneService
+                      +MultipleLines +InternetService +OnlineSecurity
+                      +OnlineBackup+DeviceProtection+TechSupport
+                      +StreamingTV+StreamingMovies
+                      +Contract+PaperlessBilling
+                      +PaymentMethod+MonthlyCharges+TotalCharges
+                          , data = train_data )
+Churn.rf
+#plot(Churn.rf)
+
+```
+
+## try different random variables
+```{r}
+oob.err=double(19)
+test.err=double(19)
+#mtry is no of Variables randomly chosen at each split
+for(mtry in 1:19) 
+{
+  rf=randomForest(churn_number ~ gender + SeniorCitizen + Partner+Dependents+tenure+ PhoneService
+                      +MultipleLines +InternetService +OnlineSecurity
+                      +OnlineBackup+DeviceProtection+TechSupport
+                      +StreamingTV+StreamingMovies
+                      +Contract+PaperlessBilling
+                      +PaymentMethod+MonthlyCharges+TotalCharges
+                          , data = train_data ,mtry=mtry,ntree=400)
+   oob.err[mtry] = rf$mse[400] #Error of all Trees fitted
+  
+  pred<-predict(rf,test_data) #Predictions on Test Set for each Tree
+  test.err[mtry]= with(test_data, mean( (churn_number - pred)^2)) #Mean Squared Test Error
+  
+  cat(mtry," ") #printing the output to the console
+  
+}
+```
+
+## Plot different error
+```{r}
+test.err
+oob.err
+matplot(1:mtry , cbind(oob.err,test.err), pch=19 , col=c("red","blue"),type="b",ylab="Mean Squared Error",xlab="Number of Predictors Considered at each Split")
+legend("topright",legend=c("Out of Bag Error","Test Error"),pch=19, col=c("red","blue"))
+```
+
+## Test Data
+```{r}
+#str(test_data)
+#test_data<- test_data[,-1]
+str(train_data)
+out_test <- predict(Churn.rf, test_data)
+auc(test_data$churn_number,out_test)
+out_train<- predict(Churn.rf,train_data)
+auc(train_data$churn_number,out_train)
+
+fit.results.churn_rf <- ifelse(out_test > 0.5,1,0)
+misClasificError <- mean(fit.results.churn_rf != test_data$churn_number)
+print(paste('Accuracy',1-misClasificError))
+
+fit.results.churn_rf <- ifelse(out_train > 0.5,1,0)
+misClasificError <- mean(fit.results.churn_rf != train_data$churn_number)
+print(paste('Accuracy',1-misClasificError))
+```
+
+## Taking only important predictor
+```{r}
+Churn.rf_imp=randomForest(churn_number ~ tenure+ PhoneService
+                      +InternetService +OnlineSecurity+TechSupport
+                      +Contract+PaperlessBilling+PaymentMethod, data = train_data,ntree = 200, mtry = 2, importance = TRUE, proximity = TRUE )
+Churn.rf_imp
+fit.results.churn_rf <- ifelse(out_train_imp > 0.5,1,0)
+misClasificError <- mean(fit.results.churn_rf != train_data$churn_number)
+print(paste('Accuracy',1-misClasificError))
+
+out_train_imp<- predict(Churn.rf_imp, train_data)
+auc(train_data$churn_number,out_train_imp)
+out_test_imp <- predict(Churn.rf_imp, test_data)
+auc(test_data$churn_number,out_test_imp)
+```
+
